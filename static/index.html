@@ -1,0 +1,133 @@
+```html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Тихая комната</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#f4ece6; --card:#fbf6f2; --ink:#3b2f2f; --soft:#8c7773; --line:#e6d8d0;
+  --accent:#b5707a; --accent-ink:#fff8f5;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#211a1b; --card:#2a2122; --ink:#efe2dc; --soft:#a58f8a; --line:#3a2e2f;
+         --accent:#c98a92; --accent-ink:#2a1a1d; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:Georgia,"Times New Roman",serif}
+body{min-height:100vh;padding:max(18px,env(safe-area-inset-top)) 18px max(24px,env(safe-area-inset-bottom));
+  max-width:520px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+h1{font-size:22px;font-weight:normal;letter-spacing:.02em;margin:0}
+.bal{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:15px}
+nav{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+nav button{flex:1;background:none;border:0;padding:10px 0;font:inherit;color:var(--soft);
+  border-bottom:2px solid transparent;cursor:pointer}
+nav button.on{color:var(--ink);border-color:var(--accent)}
+section{display:none}section.on{display:block}
+textarea{width:100%;min-height:120px;resize:none;background:var(--card);color:var(--ink);
+  border:1px solid var(--line);border-radius:16px;padding:14px;font:inherit;font-size:16px;outline:none}
+textarea:focus{border-color:var(--accent)}
+.btn{width:100%;margin-top:12px;padding:14px;border:0;border-radius:16px;background:var(--accent);
+  color:var(--accent-ink);font:inherit;font-size:16px;cursor:pointer;transition:opacity .2s}
+.btn:disabled{opacity:.5}
+.hint{color:var(--soft);font-size:13px;text-align:center;margin:12px 0}
+.err{color:var(--accent);font-size:14px;text-align:center;min-height:20px;margin-top:10px}
+.result{margin-top:18px;text-align:center}
+.result img{width:100%;border-radius:18px;border:1px solid var(--line);animation:fade .8s ease}
+.loader{display:none;margin:26px auto;color:var(--soft);text-align:center;animation:pulse 1.6s infinite}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes pulse{50%{opacity:.35}}
+.pack{display:flex;justify-content:space-between;align-items:center;background:var(--card);
+  border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:10px;cursor:pointer;font-size:17px}
+.pack small{color:var(--soft);font-size:13px;display:block;margin-top:2px}
+.pack b{font-weight:normal;color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Тихая комната</h1>
+  <div class="bal">💋 <span id="bal">…</span></div>
+</header>
+
+<nav>
+  <button class="on" data-t="gen">Создать</button>
+  <button data-t="shop">Пополнить</button>
+</nav>
+
+<section id="gen" class="on">
+  <textarea id="prompt" placeholder="Опиши, что хочется увидеть…"></textarea>
+  <button class="btn" id="go">Создать · <span id="cost">30</span> 💋</button>
+  <div class="err" id="err"></div>
+  <div class="loader" id="loader">Рисую для тебя…</div>
+  <div class="result" id="result"></div>
+</section>
+
+<section id="shop">
+  <p class="hint">Оплата звёздами Telegram</p>
+  <div id="packs"></div>
+</section>
+
+<script>
+const tg = Telegram.WebApp;
+tg.ready(); tg.expand();
+const $ = id => document.getElementById(id);
+const H = {"Content-Type":"application/json","X-Init-Data":tg.initData};
+let cost = 30;
+
+async function api(path, body){
+  const r = await fetch(path, body ? {method:"POST",headers:H,body:JSON.stringify(body)} : {headers:H});
+  return {ok:r.ok, data:await r.json().catch(()=>({}))};
+}
+
+async function load(){
+  const {ok,data} = await api("/api/me");
+  if(!ok){ $("err").textContent = "Открой приложение из Telegram"; return; }
+  $("bal").textContent = data.balance; cost = data.cost; $("cost").textContent = cost;
+  $("packs").innerHTML = "";
+  data.packs.forEach(p=>{
+    const d = document.createElement("div"); d.className = "pack";
+    d.innerHTML = `<span>${p.kisses} 💋<small>пополнение баланса</small></span><b>${p.stars} ⭐</b>`;
+    d.onclick = ()=>buy(p.kisses);
+    $("packs").appendChild(d);
+  });
+}
+
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button,section").forEach(e=>e.classList.remove("on"));
+  b.classList.add("on"); $(b.dataset.t).classList.add("on");
+});
+
+$("go").onclick = async ()=>{
+  const prompt = $("prompt").value.trim();
+  $("err").textContent = "";
+  if(!prompt){ $("err").textContent = "Напиши, что хочется увидеть"; return; }
+  $("go").disabled = true; $("loader").style.display = "block"; $("result").innerHTML = "";
+  const {ok,data} = await api("/api/generate",{prompt});
+  $("go").disabled = false; $("loader").style.display = "none";
+  if(data.balance !== undefined) $("bal").textContent = data.balance;
+  if(!ok){
+    $("err").textContent = data.error || "Что-то пошло не так";
+    if(data.error && data.error.startsWith("Не хватает")) document.querySelector('[data-t="shop"]').click();
+    return;
+  }
+  $("result").innerHTML = `<img src="${data.image}" alt=""><p class="hint">Удерживай картинку, чтобы сохранить</p>`;
+  tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+};
+
+async function buy(kisses){
+  const {ok,data} = await api("/api/invoice",{kisses});
+  if(!ok) return;
+  tg.openInvoice(data.link, async status=>{
+    if(status === "paid"){ setTimeout(load, 1200); }   // бот зачислит чуть позже
+  });
+}
+
+load();
+</script>
+</body>
+</html>
+```
