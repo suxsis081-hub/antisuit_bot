@@ -1,4 +1,3 @@
-```python
 import asyncio, base64, hashlib, hmac, json, os, sqlite3, time
 from urllib.parse import parse_qsl
 
@@ -149,4 +148,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-```
